@@ -3,6 +3,7 @@ import math
 
 import numpy as np
 from tqdm import trange
+from pyswarm import pso
 
 
 # step functions
@@ -61,7 +62,21 @@ def rmse(x, y):
 # weight optimization algorithms
 
 def pso():  # TODO: add particle swarm optimization
-    pass
+    n = 3 #no of weights / nodes
+
+    def func(w, *args):
+        x = args #values from the time series
+        result = 0 
+        for i in 1 : n:
+            result += x[i] * w[i]
+        return result - x[i+1]
+    
+    lb = np.zeros(n)
+    ub = np.ones(n)
+    
+    args = x
+    xopt, fopt = pso(func, lb, ub, args = args)
+#jakoś tak
 
 
 def ga():  # TODO: add genetic algorithm
