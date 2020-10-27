@@ -4,6 +4,7 @@ import math
 import numpy as np
 from tqdm import trange
 from pyswarm import pso
+from geneticalgorithm import geneticalgorithm as ga
 
 
 # step functions
@@ -71,16 +72,33 @@ def pso():  # TODO: add particle swarm optimization
             result += x[i] * w[i]
         return result - x[i+1]
     
-    lb = np.zeros(n)
+    lb = -np.ones(n)
     ub = np.ones(n)
     
-    args = x
-    xopt, fopt = pso(func, lb, ub, args = args)
-#jakoś tak
+    fargs = x
+    xopt, fopt = pso(func, lb, ub, args = fargs)
+    
+    return xopt, fopt
 
 
 def ga():  # TODO: add genetic algorithm
-    pass
+    n = 3
+
+    varbound = np.array([[-1,1]]*n)
+    
+
+    def f(X):
+        result = 0
+        for i in 1 : n:
+            result+= X[i] * w[i]
+        return result
+    
+    model=ga(function = f, dimension = n, variable_type = 'real', variable_boundaries = varbound)
+    model.run()
+    convergence = model.report
+    solution = model.output_dict
+    return solution
+
 
 
 #
