@@ -1,5 +1,14 @@
-numpy==1.19.2
-tqdm==4.50.2
-pyswarm==0.6
+certifi==2020.6.20
+cycler==0.10.0
+func-timeout==4.3.5
 geneticalgorithm==1.0.1
+kiwisolver==1.3.0
 matplotlib==3.3.2
+numpy==1.19.2
+Pillow==8.0.1
+pyparsing==2.4.7
+pyswarm==0.6
+python-dateutil==2.8.1
+pytz==2020.1
+six==1.15.0
+tqdm==4.50.2

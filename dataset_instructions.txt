@@ -1,0 +1,12 @@
+Dataset folder structure
+
+src/
+    UWaveGestureLibrary/
+        Test/
+            1/
+            2/
+            ...
+        Train/
+            1/
+            2/
+            ...
