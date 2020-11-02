@@ -21,10 +21,11 @@ def mainpso(n, m):
     
     aggr = np.zeros(n)
     weightsAgg = np.zeros((n,m))
-    weightsFcm = np.zeros(n)
+    weightsFcm = np.zeros((n,n))
 
     def func(w):
-        res = 0
+        fresult = 0
+        res = np.zeros(n)
         for i in range(0,n):
             result = 0
             wx = 0
@@ -34,23 +35,26 @@ def mainpso(n, m):
                 #result+=w[i*m + j] * inputs[i][j]
                 result += wx * inputs[i][j]
             aggr[i] = result
-            res += aggr[i] * w[n*m + i]
-        return (res - inputs[0][m])**2    
+            for k in range(0,n):
+                res[k] += aggr[i] * w[n*m + k*n + i]
+        for l in range(0,n):
+            fresult += (res[l] - inputs[l][m])**2
+        #fresult += (res[1] - inputs[1][m])**2
+        return fresult  
 
-    lb = -np.ones(n*m + n)
-    ub = np.ones(n*m + n)
-    xopt, fopt = pso(func, lb, ub, maxiter = 2000, phig = 0.1, phip = 0.1, debug=False)
+    lb = -np.ones(n*m + n*n)
+    ub = np.ones(n*m + n*n)
+    xopt, fopt = pso(func, lb, ub, maxiter = 10000, phig = 0.5, phip = 0.5, debug=False)
     
     #print(xopt)
     #print(fopt)
     #print(aggr)
-    ind = 0
     for t in range(0,n):
         for l in range(0,m):
             weightsAgg[t][l] = xopt[t*m + l]
-    for t in range(n*m, n*m + n):
-        weightsFcm[ind] = xopt[t]
-        ind += 1
+    for r in range(0,n):
+        for y in range(0,n):
+            weightsFcm[r][y] = xopt[n*m + r*n + y]
 
     print("Aggregation weights:")    
     print(weightsAgg)
@@ -58,10 +62,11 @@ def mainpso(n, m):
     print("Cognitive map weights:")
     print(weightsFcm)
     print('---')
-    print("Result:")
-    finres = 0
+    print("Results:")
+    finres = np.zeros(n)
     for k in range(0, n):
-        finres += xopt[n*m + k] * aggr[k]
+        for l in range(0,n):
+            finres[k] += xopt[n*m + k*n + l] * aggr[l]
     print(finres)
 
     return
