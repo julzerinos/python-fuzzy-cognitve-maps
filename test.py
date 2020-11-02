@@ -1,75 +1,70 @@
 import numpy as np
 from pyswarm import pso
-from geneticalgorithm import geneticalgorithm as ga
 import matplotlib
 import random
 
-def mainpso():
+def mainpso(n, m):
 
-    inputx = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6]
-    #weights = [-0.5, 0.2, 0.6]
-    #print(weights)
-    weights = []
-    output = []
-    n = 3 #number of nodes
+    #n = number of nodes
+    #m = size of window
 
-    for i in range(0,n):
-        def func(w):
-            result = 0
-            for j in range(0,n): 
-                result+=w[j] * inputx[j]
-                #w1 = w[0]
-                #w2 = w[1]
-                #w3 = w[2]
-            #return w1 * inputx[0 + i] + w2 * inputx[1 + i] + w3 * inputx[2 + i]
-            return result
-        
-        def con(w):
-            result = 0
-            for j in range(0,n):
-                result+=w[j] * inputx[j]
-            #w1 = w[0]
-            #w2 = w[1]
-            #w3 = w[2]
-            #return [w1 * inputx[0 + i] + w2 * inputx[1 + i] + w3 * inputx[2 + i] - inputx[1 + i]]
-            return result - inputx[j - 1 + i]
-
-        lb = -np.ones(n)
-        ub = np.ones(n)
-        xopt, fopt = pso(func, lb, ub, f_ieqcons=con, maxiter = 200)
-        print(xopt)
-        print(fopt)
-        print('---')
-        print(inputx[1 + i])
-        res = 0
-        for k in range(0, n):
-            res += xopt[k] * inputx[k]
-        #print(xopt[0] * inputx[0] + xopt[1] * inputx[1] + xopt[2] * inputx[2])
-        print(res)
-
-        weights.append(xopt)
-        output.append(res)
+    #-----
+    #input, matrix n * (m + 1)
+    inputx = [0.1, 0.2, 0.3, 0.4, 0.5]
+    inputy = [0.2, 0.4, 0.6, 0.8, 1]
+    inputz = [0.3, 0.6, 0.9, 1.2, 1.5]
+    inputs = []
+    inputs.append(inputx)
+    inputs.append(inputy)
+    inputs.append(inputz)
+    #-----
     
-    print(weights)
-    print(output)
+    aggr = np.zeros(n)
+    weightsAgg = np.zeros((n,m))
+    weightsFcm = np.zeros(n)
 
+    def func(w):
+        res = 0
+        for i in range(0,n):
+            result = 0
+            wx = 0
+            for j in range(0,m):
+                wx = weightsAgg[i][j]
+                weightsAgg[i][j] = w[i*m + j]
+                #result+=w[i*m + j] * inputs[i][j]
+                result += wx * inputs[i][j]
+            aggr[i] = result
+            res += aggr[i] * w[n*m + i]
+        return (res - inputs[0][m])**2    
 
-def mainga():
-    def f(X):
-        return np.sum(X)
+    lb = -np.ones(n*m + n)
+    ub = np.ones(n*m + n)
+    xopt, fopt = pso(func, lb, ub, maxiter = 2000, phig = 0.1, phip = 0.1, debug=False)
+    
+    #print(xopt)
+    #print(fopt)
+    #print(aggr)
+    ind = 0
+    for t in range(0,n):
+        for l in range(0,m):
+            weightsAgg[t][l] = xopt[t*m + l]
+    for t in range(n*m, n*m + n):
+        weightsFcm[ind] = xopt[t]
+        ind += 1
 
-    varbound=np.array([[0,10]]*3)
+    print("Aggregation weights:")    
+    print(weightsAgg)
+    print('---')
+    print("Cognitive map weights:")
+    print(weightsFcm)
+    print('---')
+    print("Result:")
+    finres = 0
+    for k in range(0, n):
+        finres += xopt[n*m + k] * aggr[k]
+    print(finres)
 
-    model=ga(function=f,dimension=3,variable_type='real',variable_boundaries=varbound)
-
-    model.run()
-
-    convergence=model.report
-    solution=model.output_dict
-
-    print(convergence)
-    print(solution)
+    return
 
 if __name__ == '__main__':
-    mainpso()
-    #mainga()
+    mainpso(3, 4)
