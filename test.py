@@ -38,6 +38,7 @@ def mainpso(n, m):
             for k in range(0,n):
                 res[k] += aggr[i] * w[n*m + k*n + i]
         for l in range(0,n):
+
             fresult += (res[l] - inputs[l][m])**2
         #fresult += (res[1] - inputs[1][m])**2
         return fresult  

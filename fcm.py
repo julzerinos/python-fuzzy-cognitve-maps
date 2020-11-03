@@ -1,9 +1,27 @@
 import argparse
 import csv
 import math
+import os
+import sys
+from contextlib import contextmanager
 
 import numpy as np
+import pyswarm
+from matplotlib import pyplot as plt
 from tqdm import trange
+
+
+# helper
+
+@contextmanager
+def suppress_stdout():
+    with open(os.devnull, "w") as devnull:
+        old_stdout = sys.stdout
+        sys.stdout = devnull
+        try:
+            yield
+        finally:
+            sys.stdout = old_stdout
 
 
 # step functions
@@ -68,26 +86,6 @@ def rmse(x, y):
 
 # weight optimization algorithms
 
-def pso():  # TODO: add particle swarm optimization
-    # n = 3 #no of weights / nodes
-    #
-    # def func(w, *args):
-    #     x = args #values from the time series
-    #     result = 0
-    #     for i in 1 : n:
-    #         result += x[i] * w[i]
-    #     return result - x[i+1]
-    #
-    # lb = -np.ones(n)
-    # ub = np.ones(n)
-    #
-    # fargs = x
-    # xopt, fopt = pso(func, lb, ub, args = fargs)
-    #
-    # return xopt, fopt
-    pass
-
-
 def ga():  # TODO: add genetic algorithm
     # n = 3
     #
@@ -108,31 +106,120 @@ def ga():  # TODO: add genetic algorithm
     pass
 
 
+def pso(fcm_weights, agg_weights, bounds_range, const, func):
+    n, m = const
+
+    bounds = np.concatenate((fcm_weights.flatten(), agg_weights.flatten()), axis=None)
+    lb = np.vectorize(lambda t: min(t - bounds_range, 1))(bounds)
+    ub = np.vectorize(lambda t: max(t + bounds_range, -1))(bounds)
+
+    with suppress_stdout():
+        xopt, fopt = pyswarm.pso(func, lb, ub, args=const, debug=False)
+
+    fcm_weights = np.reshape(xopt[:n * n], (n, n))
+    agg_weights = np.reshape(xopt[n * n:], (m, n))
+
+    return fcm_weights, agg_weights, fopt
+
+
+def pso_inner(
+        transformation,
+        fcm_weights, agg_weights,
+        x, y,
+        error,
+        bounds_range=.25
+):
+    def func(w, *args):
+        xi, yi, ni, mi = args
+
+        fw = np.reshape(w[:ni * ni], (ni, ni))
+        aw = np.reshape(w[ni * ni:], (mi, ni))
+
+        yt = calc(transformation, fw, aw, xi)
+        e = error(yt, yi)
+
+        return e
+
+    n = fcm_weights.shape[0]
+    m = agg_weights.shape[0]
+    const = (n, m, x, y)
+
+    fcm_weights, agg_weights, fopt = pso(fcm_weights, agg_weights, bounds_range, const, func)
+
+    return fcm_weights, agg_weights, fopt
+
+
+def pso_outer(
+        transformation,
+        fcm_weights, agg_weights,
+        time_series, step, window,
+        error,
+        bounds_range=.25
+):
+    def func(w, *args):
+        ni, mi = args
+
+        fw = np.reshape(w[:ni * ni], (n, n))
+        aw = np.reshape(w[ni * ni:], (m, n))
+
+        yts, ys = calc_all(time_series, step, window, transformation, fw, aw)
+        e = error(yts, ys)
+
+        return e
+
+    n = fcm_weights.shape[0]
+    m = agg_weights.shape[0]
+    const = (n, m)
+
+    fcm_weights, agg_weights, fopt = pso(fcm_weights, agg_weights, bounds_range, const, func)
+
+    return fcm_weights, agg_weights, fopt
+
+
 #
 
-# model modes (generators)
+# model modes
+
+def calc(transformation, weights, input_weights, x):
+    return transformation(
+        np.matmul(
+            weights,
+            np.einsum("ij,ij->j", input_weights, x)
+        )
+    )
+
+
+def calc_all(time_series, step, window, transformation, weights, input_weights):
+    yts = np.array([])
+    ys = np.array([])
+
+    for step in step(time_series, window):
+        yt = [calc(transformation, weights, input_weights, step['x'])]
+        yts = np.concatenate((yts, yt), axis=None)
+        ys = np.concatenate((ys, step['y']), axis=None)
+
+    return yts, ys
+
 
 def inner_calculations(
         time_series,
         fuzzy_nodes, window,
         step, transformation,
         weights, input_weights,
-        error, error_max
+        error
 ):
+    error_max = -1
+
     for step in step(time_series, window):
-        yt = transformation(
-            np.matmul(
-                weights,
-                np.einsum("ij,ij->j", input_weights, step['x'])
-            )
+        weights, input_weights, e = pso_inner(
+            transformation,
+            weights, input_weights,
+            step['x'], step['y'],
+            error
         )
-        e = error(yt, step['y'])
 
         if error_max < e:
             error_max = e
-
-        weights = np.random.rand(fuzzy_nodes, fuzzy_nodes)  # TODO: weights optimization algorithm
-        input_weights = np.random.rand(window, fuzzy_nodes)
 
     return weights, input_weights, error_max
 
@@ -142,29 +229,16 @@ def outer_calculations(
         fuzzy_nodes, window,
         step, transformation,
         weights, input_weights,
-        error, error_max
+        error
 ):
-    yts = np.array([])
-    ys = np.array([])
+    weights, input_weights, e = pso_outer(
+        transformation,
+        weights, input_weights,
+        time_series, step, window,
+        error
+    )
 
-    for step in step(time_series, window):
-        yt = [transformation(
-            np.matmul(
-                weights,
-                np.einsum("ij,ij->j", input_weights, step['x'])
-            )
-        )]
-        yts = np.concatenate((yts, yt), axis=None)
-        ys = np.concatenate(ys, step['y'], axis=None)
-
-    e = error(ys, yts)
-    if error_max < e:
-        error_max = e
-
-    weights = np.random.rand(fuzzy_nodes, fuzzy_nodes)  # TODO: weights optimization algorithm
-    input_weights = np.random.rand(window, fuzzy_nodes)
-
-    return weights, input_weights, error_max
+    return weights, input_weights, e
 
 
 #
@@ -203,11 +277,13 @@ def main():
     step = overlap_steps
     transformation = sigmoid()
     error = mse
-    mode = inner_calculations
+    mode = outer_calculations
 
     max_iter = args.i
     performance_index = 0.05
-    error_max = -1
+
+    errors = []
+    loop_error = 0
 
     time_series = import_from_uwave()
     fuzzy_nodes = time_series.shape[1]
@@ -217,15 +293,17 @@ def main():
     weights = np.random.rand(fuzzy_nodes, fuzzy_nodes)
 
     for _ in trange(max_iter, desc='model iterations', leave=True):
-        weights, input_weights, error_max = mode(
+        weights, input_weights, loop_error = mode(
             time_series,
             fuzzy_nodes, window,
             step, transformation,
             weights, input_weights,
-            error, error_max
+            error
         )
 
-        if error_max < performance_index:
+        errors.append(loop_error)
+
+        if loop_error <= performance_index:
             break
 
     # TODO: display results
@@ -235,7 +313,13 @@ def main():
     print(weights)
     print()
     print("final error ? performance index")
-    print(error_max, '>' if error_max > performance_index else '<=', performance_index)
+    print(loop_error, '>' if loop_error > performance_index else '<=', performance_index)
+    print()
+    print("iterations")
+    print(len(errors))
+
+    plt.plot(errors)
+    plt.show()
 
     # TODO: error graph (matplotlib)
     # TODO: source vs forecast values graph
