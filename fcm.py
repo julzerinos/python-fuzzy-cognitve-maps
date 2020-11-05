@@ -74,12 +74,18 @@ def gaussian():
 
 # error functions
 
+# TODO: Average of all variable errors
+
+
 def mse(x, y):
     return np.square(np.subtract(x, y)).mean()
 
 
 def rmse(x, y):
     return math.sqrt(mse(x, y))
+
+
+# TODO: Percent error
 
 
 #
@@ -243,12 +249,17 @@ def outer_calculations(
 
 #
 
+# TODO: Add feature classification weights & voting during loops
+
+
 # data import
 
+# TODO: Rescale within variable scope
 def rescale(min, max):
     return lambda x: (x - min) / (max - min)
 
 
+# TODO: Transform test and train
 def import_and_transform(file, sep=',', header=None):
     with open(file, newline='') as csv_file:
         model_input = np.array(list(csv.reader(csv_file))).astype(np.float)
@@ -258,6 +269,10 @@ def import_and_transform(file, sep=',', header=None):
     return rescale(min, max)(model_input)
 
 
+# TODO: Fuzzy c-means for scalar time series
+#   - Fuzzy clustering
+#   - Python framework
+# TODO: classes
 def import_from_uwave():
     return import_and_transform("UWaveGestureLibrary/Train/1/10.csv")  # TODO: choose random train/test
 
@@ -276,11 +291,11 @@ def main():
 
     step = overlap_steps
     transformation = sigmoid()
-    error = mse
+    error = rmse
     mode = outer_calculations
 
     max_iter = args.i
-    performance_index = 0.05
+    performance_index = 0.01
 
     errors = []
     loop_error = 0
@@ -321,7 +336,6 @@ def main():
     plt.plot(errors)
     plt.show()
 
-    # TODO: error graph (matplotlib)
     # TODO: source vs forecast values graph
 
 
