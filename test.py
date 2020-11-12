@@ -5,6 +5,7 @@ import random
 from pymoo.model.problem import Problem
 from pymoo.algorithms.so_genetic_algorithm import GA
 from pymoo.algorithms.so_de import DE
+from pymoo.algorithms.so_cmaes import CMAES
 from pymoo.optimize import minimize
 
 def mainpso(n, m):
@@ -94,20 +95,29 @@ def mainmoo():
 #to działa
     #algorithm = GA(pop_size=100, eliminate_duplicates=True)
 #
-    val = [0.47013193, 0.51047106, 0.8363237 ]
+    #val = [0.47013193, 0.51047106, 0.8363237 ]
+    val = [0.5, 0.5, 0.5]
     pop = np.ndarray(shape=(1,3), buffer=np.array(val))
     print(pop)
 
 #to nie działa, jak chcemy
 #sampling to tylko zbiór wartości, z których może korzystać, nie są mutowane
 #można dać kilka istniejących rozwiązań i wtedy je przemiesza
-    algorithm = DE(pop_size=100, sampling=pop, variant="DE/rand/1/bin", F=0.3, CR=0.5)
+    #algorithm = DE(pop_size=100, sampling=pop, variant="DE/rand/1/bin", F=0.3, CR=0.5)
 
+
+    algorithm = CMAES(x0=pop, restarts = 2, tolfun=1e-4, tolx=1e-4, restart_from_best = True, bipop=True)
+#cmaes jest jakieś dzikie, trzeba ograniczyć iteracje i verbose=False
     
-    res = minimize(elementwise_problem, algorithm, seed=1, verbose=True)
+    res = minimize(elementwise_problem, algorithm, ('n_iter', 5000), seed=1, verbose=False)
     print("Best solution found: \nX = %s\nF = %s" % (res.X, res.F))
     #print(res.X[0][0] * inputx[0] + res.X[0][1] * inputx[1] + res.X[0][2] * inputx[2])
     #print(res.X[0][1])
+
+    return
+
+def mainscipy():
+    
 
     return
 
