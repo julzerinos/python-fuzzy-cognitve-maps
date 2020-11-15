@@ -2,11 +2,16 @@ import numpy as np
 from pyswarm import pso
 import matplotlib
 import random
+#pymoo
 from pymoo.model.problem import Problem
 from pymoo.algorithms.so_genetic_algorithm import GA
 from pymoo.algorithms.so_de import DE
 from pymoo.algorithms.so_cmaes import CMAES
 from pymoo.optimize import minimize
+#scipy
+from scipy.optimize import minimize as minsci
+from scipy.optimize import Bounds
+from scipy.optimize import NonlinearConstraint
 
 def mainpso(n, m):
 
@@ -118,9 +123,30 @@ def mainmoo():
 
 def mainscipy():
     
+    inputx = [0.1, 0.2, 0.3, 0.4, 0.5]
+
+    def func(x):
+        return x[0]*inputx[0] + x[1]*inputx[1] + x[2]*inputx[2]
+
+    def cons(x):
+        return [x[0]*inputx[0] + x[1]*inputx[1] + x[2]*inputx[2] - inputx[3]]
+
+    #x0 = np.array([0.5, 0.5, 0.5])
+    x0 = np.array([0.45512582, 0.65955673, 0.74192024])
+    lb = -np.ones(3)
+    ub = np.ones(3)
+    bnds = Bounds(lb, ub)
+    nonlinc = NonlinearConstraint(cons, 0, 0)
+
+    #res = minsci(func, x0, method='Powell', bounds=bnds, options={'disp': True})
+    res = minsci(func, x0, method='trust-constr', constraints=nonlinc, options={'disp': True}, bounds=bnds)
+    print(res.x)
+    print('Result:')
+    print(res.x[0] * inputx[0] + res.x[1] * inputx[1] + res.x[2] * inputx[2])
 
     return
 
 if __name__ == '__main__':
     #mainpso(3, 4)
-    mainmoo()
+    #mainmoo()
+    mainscipy()
