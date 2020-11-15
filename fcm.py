@@ -2,11 +2,13 @@ import argparse
 import csv
 import math
 import os
+import signal
 import sys
 from contextlib import contextmanager
 
 import numpy as np
 import pyswarm
+import scipy.optimize as optimize
 from matplotlib import pyplot as plt
 from tqdm import trange
 
@@ -24,6 +26,14 @@ def suppress_stdout():
             sys.stdout = old_stdout
 
 
+LAST_SIGNAL = 0
+
+
+def signal_handle(sig, frame):
+    global LAST_SIGNAL
+    LAST_SIGNAL = sig
+
+
 # step functions
 
 def steps_with_offset(arr, n, offset):
@@ -33,16 +43,10 @@ def steps_with_offset(arr, n, offset):
 
 
 def distinct_steps(arr, n):
-    # return [
-    #     {"x": np.array(arr[i:i + n]), "y": np.array(arr[i + n])} for i in range(0, len(arr) + 1 - n, n)
-    # ]
     return steps_with_offset(arr, n, n)
 
 
 def overlap_steps(arr, n):
-    # return [
-    #     {"x": np.array(arr[i:i + n]), "y": np.array(arr[i + n])} for i in range(0, len(arr) - n)
-    # ]
     return steps_with_offset(arr, n, 1)
 
     #
@@ -83,6 +87,22 @@ def mse(x, y):
 
 def rmse(x, y):
     return math.sqrt(mse(x, y))
+
+
+def cpe(x, y):
+    return np.mean(x != y)
+
+
+def pe(x, y):
+    return
+
+
+def mpe(x, y):
+    return np.mean(np.abs((x - y) / (x + 1e-7)))
+
+
+def se(x, y):
+    return np.subtract(x, y)
 
 
 # TODO: Percent error
@@ -182,6 +202,75 @@ def pso_outer(
     return fcm_weights, agg_weights, fopt
 
 
+def scipy(fcm_weights, agg_weights, const, func):
+    flat_weights = np.concatenate((fcm_weights.flatten(), agg_weights.flatten()), axis=None)
+
+    bounds = optimize.Bounds(-np.ones(flat_weights.shape), np.ones(flat_weights.shape))
+    nonlinc = optimize.NonlinearConstraint(func, 0, 0)
+
+    res = optimize.minimize(func, flat_weights, method='trust-constr', bounds=bounds,
+                            # constraints=nonlinc,
+                            options={'disp': True, 'maxiter': 300, 'xtol': 1e-10})
+    # res = optimize.minimize(func, flat_weights, method='trust-constr', constraints=nonlinc, options={'disp': True}, bounds=bnds)
+
+    n, m = const
+
+    fcm_weights = np.reshape(res.x[:n * n], (n, n))
+    agg_weights = np.reshape(res.x[n * n:], (m, n))
+
+    return fcm_weights, agg_weights, res.fun
+
+
+def scipy_inner(
+        transformation,
+        fcm_weights, agg_weights,
+        x, y,
+        error
+):
+    n = fcm_weights.shape[0]
+    m = agg_weights.shape[0]
+
+    def func(w):
+        fw = np.reshape(w[:n * n], (n, n))
+        aw = np.reshape(w[n * n:], (m, n))
+
+        yt = calc(transformation, fw, aw, x)
+
+        return np.subtract(yt, y)
+
+    const = n, m
+
+    fcm_weights, agg_weights, err = scipy(fcm_weights, agg_weights, const, func)
+
+    return fcm_weights, agg_weights, err
+
+
+def scipy_outer(
+        transformation,
+        fcm_weights, agg_weights,
+        time_series, step, window,
+        error
+):
+    n = fcm_weights.shape[0]
+    m = agg_weights.shape[0]
+
+    def func(w):
+        fw = np.reshape(w[:n * n], (n, n))
+        aw = np.reshape(w[n * n:], (m, n))
+
+        yts, ys = calc_all(time_series, step, window, transformation, fw, aw)
+
+        err = error(ys, yts)
+
+        return err
+
+    const = n, m
+
+    fcm_weights, agg_weights, e = scipy(fcm_weights, agg_weights, const, func)
+
+    return fcm_weights, agg_weights, e
+
+
 #
 
 # model modes
@@ -217,7 +306,7 @@ def inner_calculations(
     error_max = -1
 
     for step in step(time_series, window):
-        weights, input_weights, e = pso_inner(
+        weights, input_weights, e = scipy_inner(
             transformation,
             weights, input_weights,
             step['x'], step['y'],
@@ -237,7 +326,7 @@ def outer_calculations(
         weights, input_weights,
         error
 ):
-    weights, input_weights, e = pso_outer(
+    weights, input_weights, e = scipy_outer(
         transformation,
         weights, input_weights,
         time_series, step, window,
@@ -289,13 +378,16 @@ def main():
                         default=4, action='store')
     args = parser.parse_args()
 
+    global LAST_SIGNAL
+    signal.signal(signal.SIGINT, signal_handle)
+
     step = overlap_steps
     transformation = sigmoid()
-    error = rmse
+    error = mpe
     mode = outer_calculations
 
     max_iter = args.i
-    performance_index = 0.01
+    performance_index = 1e-5
 
     errors = []
     loop_error = 0
@@ -316,9 +408,11 @@ def main():
             error
         )
 
+        print("loop_error: ", loop_error)
+
         errors.append(loop_error)
 
-        if loop_error <= performance_index:
+        if loop_error <= performance_index or LAST_SIGNAL == signal.SIGINT:
             break
 
     # TODO: display results
