@@ -2,6 +2,7 @@ import numpy as np
 from pyswarm import pso
 import matplotlib
 import random
+import math
 #pymoo
 from pymoo.model.problem import Problem
 from pymoo.algorithms.so_genetic_algorithm import GA
@@ -12,6 +13,9 @@ from pymoo.optimize import minimize
 from scipy.optimize import minimize as minsci
 from scipy.optimize import Bounds
 from scipy.optimize import NonlinearConstraint
+#lmfit
+from lmfit import Parameters
+from lmfit import Minimizer
 
 def mainpso(n, m):
 
@@ -123,30 +127,137 @@ def mainmoo():
 
 def mainscipy():
     
+    n=3
+    m=4
+
     inputx = [0.1, 0.2, 0.3, 0.4, 0.5]
+    inputy = [0.2, 0.4, 0.6, 0.8, 1]
+    inputz = [0.3, 0.6, 0.9, 1.2, 1.5]
+    inputs = []
+    inputs.append(inputx)
+    inputs.append(inputy)
+    inputs.append(inputz)
 
-    def func(x):
-        return x[0]*inputx[0] + x[1]*inputx[1] + x[2]*inputx[2]
+    aggr = np.zeros(n)
+    weightsAgg = np.zeros((n,m))
+    weightsFcm = np.zeros((n,n))
 
-    def cons(x):
-        return [x[0]*inputx[0] + x[1]*inputx[1] + x[2]*inputx[2] - inputx[3]]
+    #def func(x):
+    #    return x[0]*inputx[0] + x[1]*inputx[1] + x[2]*inputx[2]
+
+    def func(w):
+        fresult = 0
+        res = np.zeros(n)
+        for i in range(0,n):
+            result = 0
+            wx = 0
+            for j in range(0,m):
+                #wx = weightsAgg[i][j]
+                #weightsAgg[i][j] = w[i*m + j]
+                result+=w[i*m + j] * inputs[i][j]
+                #result += wx * inputs[i][j]
+            aggr[i] = result
+            for k in range(0,n):
+                res[k] += aggr[i] * w[n*m + k*n + i]
+        for l in range(0,n):
+            fresult += res[l]
+        #fresult += (res[1] - inputs[1][m])**2
+        return fresult 
+
+    #def cons(x):
+    #    return [x[0]*inputx[0] + x[1]*inputx[1] + x[2]*inputx[2] - inputx[3]]
+
+    def cons(w):
+        fresult = 0
+        res = np.zeros(n)
+        for i in range(0,n):
+            result = 0
+            wx = 0
+            for j in range(0,m):
+                #wx = weightsAgg[i][j]
+                #weightsAgg[i][j] = w[i*m + j]
+                result+=w[i*m + j] * inputs[i][j]
+                #result += wx * inputs[i][j]
+            aggr[i] = result
+            for k in range(0,n):
+                res[k] += aggr[i] * w[n*m + k*n + i]
+        for l in range(0,n):
+            fresult += (res[l] - inputs[l][m])**2
+        #fresult += (res[1] - inputs[1][m])**2
+        return fresult 
 
     #x0 = np.array([0.5, 0.5, 0.5])
-    x0 = np.array([0.45512582, 0.65955673, 0.74192024])
-    lb = -np.ones(3)
-    ub = np.ones(3)
+    #x0 = np.array([0.45512582, 0.65955673, 0.74192024])
+
+    x0 = np.random.rand(21)
+    
+    #lb = -np.ones(3)
+    #ub = np.ones(3)
+
+    lb = -np.ones(n*m + n*n)
+    ub = np.ones(n*m + n*n)
+
     bnds = Bounds(lb, ub)
     nonlinc = NonlinearConstraint(cons, 0, 0)
 
     #res = minsci(func, x0, method='Powell', bounds=bnds, options={'disp': True})
     res = minsci(func, x0, method='trust-constr', constraints=nonlinc, options={'disp': True}, bounds=bnds)
-    print(res.x)
+    #res = minsci(func, x0, method='trust-constr', options={'disp': True}, bounds=bnds)
+
+    #print(res.x)
+    #print('Result:')
+    #print(res.x[0] * inputx[0] + res.x[1] * inputx[1] + res.x[2] * inputx[2])
+
+    for t in range(0,n):
+        for l in range(0,m):
+            weightsAgg[t][l] = res.x[t*m + l]
+    for r in range(0,n):
+        for y in range(0,n):
+            weightsFcm[r][y] = res.x[n*m + r*n + y]
+
+    print("Aggregation weights:")    
+    print(weightsAgg)
+    print('---')
+    print("Cognitive map weights:")
+    print(weightsFcm)
+    print('---')
+    print("Results:")
+    finres = np.zeros(n)
+    for k in range(0, n):
+        for l in range(0,n):
+            finres[k] += res.x[n*m + k*n + l] * aggr[l]
+    print(finres)
+
+    return
+
+def mainlmfit():
+
+    #for i in range(1,5):
+    #    print('x' + str(i))
+
+    inputx = [0.1, 0.2, 0.3, 0.4, 0.5]
+
+    params = Parameters()
+    params.add('w1', value=0.5, min=-1, max=1)
+    params.add('w2', value=0.5, min=-1, max=1)
+    params.add('w3', value=0.5, min=-1, max=1)
+
+    def func(par):
+        return math.sqrt((par['w1']*inputx[0] + par['w2']*inputx[1] + par['w3']*inputx[2] - inputx[3])**2)
+
+    fitter = Minimizer(func, params)
+    result = fitter.minimize(method='nelder')
+    result.params.pretty_print()
+    
+    #print(result.params)
+    res = result.params
     print('Result:')
-    print(res.x[0] * inputx[0] + res.x[1] * inputx[1] + res.x[2] * inputx[2])
+    print(res['w1']*inputx[0] + res['w2']*inputx[1] + res['w3']*inputx[2])
 
     return
 
 if __name__ == '__main__':
     #mainpso(3, 4)
     #mainmoo()
-    mainscipy()
+    #mainscipy()
+    mainlmfit()
