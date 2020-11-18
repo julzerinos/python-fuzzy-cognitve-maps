@@ -372,7 +372,7 @@ def main():
 
     transformation = sigmoid
     error = rmse
-    mode = inner_calculations
+    mode = outer_calculations
 
     max_iter = args.i
     performance_index = 1e-5
