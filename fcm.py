@@ -2,13 +2,15 @@ import argparse
 import csv
 import math
 import os
+import random
 import signal
 import sys
+import time
 from contextlib import contextmanager
 
 import numpy as np
-import pyswarm
 import scipy.optimize as optimize
+from lmfit import Parameters, Minimizer
 from matplotlib import pyplot as plt
 from tqdm import trange
 
@@ -49,9 +51,10 @@ def distinct_steps(arr, n):
 def overlap_steps(arr, n):
     return steps_with_offset(arr, n, 1)
 
-    #
 
-    # transformation functions
+#
+
+# transformation functions
 
 
 def sigmoid(t=5):
@@ -78,8 +81,6 @@ def gaussian():
 
 # error functions
 
-# TODO: Average of all variable errors
-
 
 def mse(x, y):
     return np.square(np.subtract(x, y)).mean()
@@ -89,117 +90,21 @@ def rmse(x, y):
     return math.sqrt(mse(x, y))
 
 
-def cpe(x, y):
-    return np.mean(x != y)
-
-
 def pe(x, y):
-    return
+    return np.abs((x - y) / (x + 1e-7))
 
 
 def mpe(x, y):
-    return np.mean(np.abs((x - y) / (x + 1e-7)))
+    return np.mean(pe(x, y))
 
 
-def se(x, y):
-    return np.subtract(x, y)
-
-
-# TODO: Percent error
+def max_pe(x, y):
+    return pe(x, y).max()
 
 
 #
 
 # weight optimization algorithms
-
-def ga():  # TODO: add genetic algorithm
-    # n = 3
-    #
-    # varbound = np.array([[-1,1]]*n)
-    #
-    #
-    # def f(X):
-    #     result = 0
-    #     for i in 1 : n:
-    #         result+= X[i] * w[i]
-    #     return result
-    #
-    # model=ga(function = f, dimension = n, variable_type = 'real', variable_boundaries = varbound)
-    # model.run()
-    # convergence = model.report
-    # solution = model.output_dict
-    # return solution
-    pass
-
-
-def pso(fcm_weights, agg_weights, bounds_range, const, func):
-    n, m = const
-
-    bounds = np.concatenate((fcm_weights.flatten(), agg_weights.flatten()), axis=None)
-    lb = np.vectorize(lambda t: min(t - bounds_range, 1))(bounds)
-    ub = np.vectorize(lambda t: max(t + bounds_range, -1))(bounds)
-
-    with suppress_stdout():
-        xopt, fopt = pyswarm.pso(func, lb, ub, args=const, debug=False)
-
-    fcm_weights = np.reshape(xopt[:n * n], (n, n))
-    agg_weights = np.reshape(xopt[n * n:], (m, n))
-
-    return fcm_weights, agg_weights, fopt
-
-
-def pso_inner(
-        transformation,
-        fcm_weights, agg_weights,
-        x, y,
-        error,
-        bounds_range=.25
-):
-    def func(w, *args):
-        xi, yi, ni, mi = args
-
-        fw = np.reshape(w[:ni * ni], (ni, ni))
-        aw = np.reshape(w[ni * ni:], (mi, ni))
-
-        yt = calc(transformation, fw, aw, xi)
-        e = error(yt, yi)
-
-        return e
-
-    n = fcm_weights.shape[0]
-    m = agg_weights.shape[0]
-    const = (n, m, x, y)
-
-    fcm_weights, agg_weights, fopt = pso(fcm_weights, agg_weights, bounds_range, const, func)
-
-    return fcm_weights, agg_weights, fopt
-
-
-def pso_outer(
-        transformation,
-        fcm_weights, agg_weights,
-        time_series, step, window,
-        error,
-        bounds_range=.25
-):
-    def func(w, *args):
-        ni, mi = args
-
-        fw = np.reshape(w[:ni * ni], (n, n))
-        aw = np.reshape(w[ni * ni:], (m, n))
-
-        yts, ys = calc_all(time_series, step, window, transformation, fw, aw)
-        e = error(yts, ys)
-
-        return e
-
-    n = fcm_weights.shape[0]
-    m = agg_weights.shape[0]
-    const = (n, m)
-
-    fcm_weights, agg_weights, fopt = pso(fcm_weights, agg_weights, bounds_range, const, func)
-
-    return fcm_weights, agg_weights, fopt
 
 
 def scipy(fcm_weights, agg_weights, const, func):
@@ -215,10 +120,12 @@ def scipy(fcm_weights, agg_weights, const, func):
 
     n, m = const
 
+    err = func(flat_weights)
+
     fcm_weights = np.reshape(res.x[:n * n], (n, n))
     agg_weights = np.reshape(res.x[n * n:], (m, n))
 
-    return fcm_weights, agg_weights, res.fun
+    return fcm_weights, agg_weights, err
 
 
 def scipy_inner(
@@ -236,7 +143,7 @@ def scipy_inner(
 
         yt = calc(transformation, fw, aw, x)
 
-        return np.subtract(yt, y)
+        return error(yt, y)
 
     const = n, m
 
@@ -267,6 +174,77 @@ def scipy_outer(
     const = n, m
 
     fcm_weights, agg_weights, e = scipy(fcm_weights, agg_weights, const, func)
+
+    return fcm_weights, agg_weights, e
+
+
+def lmfit(fcm_weights, agg_weights, const, func):
+    flat_weights = np.concatenate((fcm_weights.flatten(), agg_weights.flatten()), axis=None)
+
+    params = Parameters()
+
+    np.fromiter(map(lambda x: params.add(f'w{x[0]}', value=x[1], min=-1, max=1), enumerate(flat_weights)), dtype=float)
+
+    fitter = Minimizer(func, params)
+    result = fitter.minimize(method='nelder')
+
+    n, m = const
+
+    err = func(result.params)
+
+    fcm_weights = np.reshape(np.fromiter([result.params[f'w{i}'] for i in range(n * n)], dtype=float), (n, n))
+    agg_weights = np.reshape(
+        np.fromiter([result.params[f'w{i}'] for i in range(n * n, len(flat_weights))], dtype=float), (m, n))
+
+    return fcm_weights, agg_weights, err
+
+
+def lmfit_inner(
+        transformation,
+        fcm_weights, agg_weights,
+        x, y,
+        error
+):
+    n = fcm_weights.shape[0]
+    m = agg_weights.shape[0]
+
+    def func(w):
+        fw = np.reshape(np.fromiter([w[f'w{i}'] for i in range(n * n)], dtype=float), (n, n))
+        aw = np.reshape(np.fromiter([w[f'w{i}'] for i in range(n * n, len(w))], dtype=float), (m, n))
+
+        yt = calc(transformation, fw, aw, x)
+
+        return error(y, yt)
+
+    const = n, m
+
+    fcm_weights, agg_weights, err = lmfit(fcm_weights, agg_weights, const, func)
+
+    return fcm_weights, agg_weights, err
+
+
+def lmfit_outer(
+        transformation,
+        fcm_weights, agg_weights,
+        time_series, step, window,
+        error
+):
+    n = fcm_weights.shape[0]
+    m = agg_weights.shape[0]
+
+    def func(w):
+        fw = np.reshape(np.fromiter([w[f'w{i}'] for i in range(n * n)], dtype=float), (n, n))
+        aw = np.reshape(np.fromiter([w[f'w{i}'] for i in range(n * n, len(w))], dtype=float), (m, n))
+
+        yts, ys = calc_all(time_series, step, window, transformation, fw, aw)
+
+        err = error(ys, yts)
+
+        return err
+
+    const = n, m
+
+    fcm_weights, agg_weights, e = lmfit(fcm_weights, agg_weights, const, func)
 
     return fcm_weights, agg_weights, e
 
@@ -306,7 +284,7 @@ def inner_calculations(
     error_max = -1
 
     for step in step(time_series, window):
-        weights, input_weights, e = scipy_inner(
+        weights, input_weights, e = lmfit_inner(
             transformation,
             weights, input_weights,
             step['x'], step['y'],
@@ -326,7 +304,7 @@ def outer_calculations(
         weights, input_weights,
         error
 ):
-    weights, input_weights, e = scipy_outer(
+    weights, input_weights, e = lmfit_outer(
         transformation,
         weights, input_weights,
         time_series, step, window,
@@ -338,32 +316,41 @@ def outer_calculations(
 
 #
 
-# TODO: Add feature classification weights & voting during loops
-
 
 # data import
 
-# TODO: Rescale within variable scope
 def rescale(min, max):
-    return lambda x: (x - min) / (max - min)
+    return lambda x: np.subtract(x, min) / np.subtract(max, min)
 
 
-# TODO: Transform test and train
-def import_and_transform(file, sep=',', header=None):
-    with open(file, newline='') as csv_file:
-        model_input = np.array(list(csv.reader(csv_file))).astype(np.float)
-    max = np.maximum.reduce(model_input)
-    min = np.minimum.reduce(model_input)
+def import_and_transform(file_train, file_test, sep=',', header=None):
+    with open(file_train, newline='') as csv_file:
+        model_input_train = np.array(list(csv.reader(csv_file))).astype(np.float)
+    with open(file_test, newline='') as csv_file:
+        model_input_test = np.array(list(csv.reader(csv_file))).astype(np.float)
 
-    return rescale(min, max)(model_input)
+    model_input = np.concatenate((model_input_train, model_input_test))
+
+    max = model_input.max(0)
+    min = model_input.min(0)
+
+    return rescale(min, max)(model_input_train), rescale(min, max)(model_input_test)
 
 
-# TODO: Fuzzy c-means for scalar time series
-#   - Fuzzy clustering
-#   - Python framework
-# TODO: classes
-def import_from_uwave():
-    return import_and_transform("UWaveGestureLibrary/Train/1/10.csv")  # TODO: choose random train/test
+def import_from_uwave(c=1, train=-1, test=-1):
+    train_path = 'UWaveGestureLibrary/Train'
+    train_files = os.listdir(f'{train_path}/{c}')
+    train_index = random.randrange(0, len(train_files))
+    train_file = f'{train_path}/{c}/{train_files[train_index]}'
+
+    test_path = 'UWaveGestureLibrary/Test'
+    test_files = os.listdir(f'{test_path}/{c}')
+    test_index = random.randrange(0, len(test_files))
+    test_file = f'{test_path}/{c}/{test_files[test_index]}'
+
+    train_series, test_series = import_and_transform(train_file, test_file)
+
+    return train_series, test_series, train_file, test_file
 
 
 #
@@ -372,7 +359,7 @@ def main():
     parser = argparse.ArgumentParser(description='Fuzzy Cognitive Map Temporal Data Forecaster')
     parser.add_argument('-i', metavar='i',
                         type=int, help='the maximal iteration count',
-                        default=500, action='store')
+                        default=250, action='store')
     parser.add_argument('-n', metavar='n',
                         type=int, help='window size',
                         default=4, action='store')
@@ -382,9 +369,10 @@ def main():
     signal.signal(signal.SIGINT, signal_handle)
 
     step = overlap_steps
-    transformation = sigmoid()
-    error = mpe
-    mode = outer_calculations
+
+    transformation = sigmoid
+    error = rmse
+    mode = inner_calculations
 
     max_iter = args.i
     performance_index = 1e-5
@@ -392,8 +380,9 @@ def main():
     errors = []
     loop_error = 0
 
-    time_series = import_from_uwave()
-    fuzzy_nodes = time_series.shape[1]
+    data_class = 1
+    train_series, test_series, train_file, test_file = import_from_uwave(data_class)
+    fuzzy_nodes = train_series.shape[1]
     window = args.n
 
     input_weights = np.random.rand(window, fuzzy_nodes)
@@ -401,9 +390,9 @@ def main():
 
     for _ in trange(max_iter, desc='model iterations', leave=True):
         weights, input_weights, loop_error = mode(
-            time_series,
+            train_series,
             fuzzy_nodes, window,
-            step, transformation,
+            step, transformation(),
             weights, input_weights,
             error
         )
@@ -415,22 +404,53 @@ def main():
         if loop_error <= performance_index or LAST_SIGNAL == signal.SIGINT:
             break
 
-    # TODO: display results
+    ts = int(time.time())
 
-    print()
-    print("optimized weights matrix")
-    print(weights)
-    print()
-    print("final error ? performance index")
-    print(loop_error, '>' if loop_error > performance_index else '<=', performance_index)
-    print()
-    print("iterations")
-    print(len(errors))
+    if not os.path.exists('output'):
+        os.makedirs('output')
 
+    f = open(f"output/{ts}.txt", "a")
+
+    f.write("setup details ---------------\n")
+    f.write(f"train file {train_file}\n")
+    f.write(f"test file {test_file}\n")
+    f.write(f"weights optimizer: TBA\n")
+    f.write(f"error function: {error.__name__}\n")
+    f.write(f"step function: {step.__name__}\n")
+    f.write(f"transformation function: {transformation.__name__}\n")
+    f.write(f"calculations position: {mode.__name__}\n")
+    f.write(f"max iters: {max_iter}\n")
+    f.write(f"window: {str(window)}\n")
+    f.write("\n")
+    f.write("optimized weights matrix\n")
+    f.write(f"{str(weights)}\n")
+    f.write("\n")
+    f.write("final error ? performance index\n")
+    f.write(f"{loop_error} {'>' if loop_error > performance_index else '<='} {performance_index}\n")
+    f.write("\n")
+    f.write("iterations\n")
+    f.write(f"{str(len(errors))}\n")
+
+    f1 = plt.figure(1)
+    f1.suptitle('Train errors')
+    plt.ylabel(f'{error.__name__}')
+    plt.xlabel('outer loop iteration count')
     plt.plot(errors)
-    plt.show()
+    plt.savefig(f'output/train_errors_{ts}.png', bbox_inches='tight')
 
-    # TODO: source vs forecast values graph
+    test_errors = []
+    for step in step(test_series, window):
+        yt = calc(transformation(), weights, input_weights, step['x'])
+
+        test_errors.append(error(yt, step['y']))
+
+    f2 = plt.figure(2)
+    f2.suptitle('Test errors')
+    plt.ylabel(f'{error.__name__}')
+    plt.xlabel('nth forecast vs target')
+    plt.plot(test_errors)
+
+    plt.savefig(f'output/test_errors_{ts}.png', bbox_inches='tight')
 
 
 if __name__ == '__main__':
