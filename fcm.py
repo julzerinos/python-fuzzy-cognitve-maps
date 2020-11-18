@@ -362,7 +362,7 @@ def main():
                         default=250, action='store')
     parser.add_argument('-n', metavar='n',
                         type=int, help='window size',
-                        default=4, action='store')
+                        default=8, action='store')
     args = parser.parse_args()
 
     global LAST_SIGNAL
