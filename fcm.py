@@ -362,7 +362,7 @@ def main():
                         default=500, action='store')
     parser.add_argument('-n', metavar='n',
                         type=int, help='window size',
-                        default=8, action='store')
+                        default=4, action='store')
     args = parser.parse_args()
 
     global LAST_SIGNAL
@@ -456,11 +456,11 @@ def main():
         for step in step(test_series, window):
             yt = calc(transformation(), weights, input_weights, step['x'])
 
-            other_test_errors_1.append(mpe(yt, step['y']))
+            other_test_errors_1.append(rmse(yt, step['y']))
 
     f3 = plt.figure(3)
     f3.suptitle('Test other errors 1')
-    plt.ylabel(f'{mpe.__name__}')
+    plt.ylabel(f'{rmse.__name__}')
     plt.xlabel('nth forecast vs target')
     plt.plot(other_test_errors_1)
 
