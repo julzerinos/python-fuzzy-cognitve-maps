@@ -371,7 +371,7 @@ def main():
     step = overlap_steps
 
     transformation = sigmoid
-    error = rmse
+    error = mpe
     mode = inner_calculations
 
     max_iter = args.i
