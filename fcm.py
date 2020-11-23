@@ -359,10 +359,10 @@ def main():
     parser = argparse.ArgumentParser(description='Fuzzy Cognitive Map Temporal Data Forecaster')
     parser.add_argument('-i', metavar='i',
                         type=int, help='the maximal iteration count',
-                        default=250, action='store')
+                        default=500, action='store')
     parser.add_argument('-n', metavar='n',
                         type=int, help='window size',
-                        default=4, action='store')
+                        default=8, action='store')
     args = parser.parse_args()
 
     global LAST_SIGNAL
@@ -372,7 +372,7 @@ def main():
 
     transformation = sigmoid
     error = rmse
-    mode = inner_calculations
+    mode = outer_calculations
 
     max_iter = args.i
     performance_index = 1e-5
@@ -451,6 +451,34 @@ def main():
     plt.plot(test_errors)
 
     plt.savefig(f'output/test_errors_{ts}.png', bbox_inches='tight')
+
+    other_test_errors_1 = []
+        for step in step(test_series, window):
+            yt = calc(transformation(), weights, input_weights, step['x'])
+
+            other_test_errors_1.append(mpe(yt, step['y']))
+
+    f3 = plt.figure(3)
+    f3.suptitle('Test other errors 1')
+    plt.ylabel(f'{mpe.__name__}')
+    plt.xlabel('nth forecast vs target')
+    plt.plot(other_test_errors_1)
+
+    plt.savefig(f'output/other_test_errors_1_{ts}.png', bbox_inches='tight')
+
+    other_test_errors_2 = []
+        for step in step(test_series, window):
+            yt = calc(transformation(), weights, input_weights, step['x'])
+
+            other_test_errors_2.append(max_pe(yt, step['y']))
+
+    f4 = plt.figure(4)
+    f4.suptitle('Test other errors 2')
+    plt.ylabel(f'{max_pe.__name__}')
+    plt.xlabel('nth forecast vs target')
+    plt.plot(other_test_errors_2)
+
+    plt.savefig(f'output/other_test_errors_2_{ts}.png', bbox_inches='tight')
 
 
 if __name__ == '__main__':
