@@ -371,7 +371,7 @@ def main():
     step = overlap_steps
 
     transformation = sigmoid
-    error = rmse
+    error = max_pe
     mode = outer_calculations
 
     max_iter = args.i
@@ -470,11 +470,11 @@ def main():
         for step in step(test_series, window):
             yt = calc(transformation(), weights, input_weights, step['x'])
 
-            other_test_errors_2.append(max_pe(yt, step['y']))
+            other_test_errors_2.append(mpe(yt, step['y']))
 
     f4 = plt.figure(4)
     f4.suptitle('Test other errors 2')
-    plt.ylabel(f'{max_pe.__name__}')
+    plt.ylabel(f'{mpe.__name__}')
     plt.xlabel('nth forecast vs target')
     plt.plot(other_test_errors_2)
 
