@@ -143,7 +143,7 @@ def scipy_inner(
 
         yt = calc(transformation, fw, aw, x)
 
-        return error(yt, y)
+        return error(y, yt)
 
     const = n, m
 
