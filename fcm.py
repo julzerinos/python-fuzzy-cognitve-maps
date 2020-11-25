@@ -466,34 +466,5 @@ def main():
 
     f.close()
 
-    other_test_errors_1 = []
-        for step in step(test_series, window):
-            yt = calc(transformation(), weights, input_weights, step['x'])
-
-            other_test_errors_1.append(rmse(yt, step['y']))
-
-    f3 = plt.figure(3)
-    f3.suptitle('Test other errors 1')
-    plt.ylabel(f'{rmse.__name__}')
-    plt.xlabel('nth forecast vs target')
-    plt.plot(other_test_errors_1)
-
-    plt.savefig(f'output/other_test_errors_1_{ts}.png', bbox_inches='tight')
-
-    other_test_errors_2 = []
-        for step in step(test_series, window):
-            yt = calc(transformation(), weights, input_weights, step['x'])
-
-            other_test_errors_2.append(mpe(yt, step['y']))
-
-    f4 = plt.figure(4)
-    f4.suptitle('Test other errors 2')
-    plt.ylabel(f'{mpe.__name__}')
-    plt.xlabel('nth forecast vs target')
-    plt.plot(other_test_errors_2)
-
-    plt.savefig(f'output/other_test_errors_2_{ts}.png', bbox_inches='tight')
-
-
 if __name__ == '__main__':
     main()
