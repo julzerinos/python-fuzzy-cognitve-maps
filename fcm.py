@@ -91,7 +91,7 @@ def rmse(x, y):
 
 
 def pe(x, y):
-    return np.abs((x - y) / (x + 1e-7))
+    return np.abs((x + 1 - y) / (x + 1))
 
 
 def mpe(x, y):
@@ -143,7 +143,7 @@ def scipy_inner(
 
         yt = calc(transformation, fw, aw, x)
 
-        return error(yt, y)
+        return error(y, yt)
 
     const = n, m
 
@@ -438,19 +438,33 @@ def main():
     plt.plot(errors)
     plt.savefig(f'output/train_errors_{ts}.png', bbox_inches='tight')
 
-    test_errors = []
+    test_errors = {'rmse': [], 'mpe': [], 'max_pe': []}
     for step in step(test_series, window):
         yt = calc(transformation(), weights, input_weights, step['x'])
 
-        test_errors.append(error(yt, step['y']))
+        test_errors['rmse'].append(rmse(step['y'], yt))
+        test_errors['mpe'].append(mpe(step['y'], yt))
+        test_errors['max_pe'].append(max_pe(step['y'], yt))
 
-    f2 = plt.figure(2)
-    f2.suptitle('Test errors')
-    plt.ylabel(f'{error.__name__}')
-    plt.xlabel('nth forecast vs target')
-    plt.plot(test_errors)
+    for i, err in enumerate(test_errors):
+        f2 = plt.figure(i + 2)
+        f2.suptitle(f'{err} errors')
+        plt.ylabel(f'{err}')
+        plt.xlabel('nth forecast vs target')
+        plt.plot(test_errors[err])
 
-    plt.savefig(f'output/test_errors_{ts}.png', bbox_inches='tight')
+        plt.savefig(f'output/{err}_errors_{ts}.png', bbox_inches='tight')
+
+    f.write("\n")
+    f.write("test errors\n")
+    f.write(
+        f"rmse max {np.array(test_errors['rmse']).max()} min {np.array(test_errors['rmse']).min()} final {test_errors['rmse'][-1]}\n")
+    f.write(
+        f"mpe max {np.array(test_errors['mpe']).max()} min {np.array(test_errors['mpe']).min()} final {test_errors['mpe'][-1]}\n")
+    f.write(
+        f"max_pe max {np.array(test_errors['max_pe']).max()} min {np.array(test_errors['max_pe']).min()} final {test_errors['max_pe'][-1]}\n")
+
+    f.close()
 
     other_test_errors_1 = []
         for step in step(test_series, window):
