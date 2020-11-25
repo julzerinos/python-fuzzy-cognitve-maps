@@ -143,7 +143,7 @@ def scipy_inner(
 
         yt = calc(transformation, fw, aw, x)
 
-        return error(yt, y)
+        return error(y, yt)
 
     const = n, m
 
@@ -465,34 +465,6 @@ def main():
         f"max_pe max {np.array(test_errors['max_pe']).max()} min {np.array(test_errors['max_pe']).min()} final {test_errors['max_pe'][-1]}\n")
 
     f.close()
-
-    other_test_errors_1 = []
-        for step in step(test_series, window):
-            yt = calc(transformation(), weights, input_weights, step['x'])
-
-            other_test_errors_1.append(mpe(yt, step['y']))
-
-    f3 = plt.figure(3)
-    f3.suptitle('Test other errors 1')
-    plt.ylabel(f'{mpe.__name__}')
-    plt.xlabel('nth forecast vs target')
-    plt.plot(other_test_errors_1)
-
-    plt.savefig(f'output/other_test_errors_1_{ts}.png', bbox_inches='tight')
-
-    other_test_errors_2 = []
-        for step in step(test_series, window):
-            yt = calc(transformation(), weights, input_weights, step['x'])
-
-            other_test_errors_2.append(max_pe(yt, step['y']))
-
-    f4 = plt.figure(4)
-    f4.suptitle('Test other errors 2')
-    plt.ylabel(f'{max_pe.__name__}')
-    plt.xlabel('nth forecast vs target')
-    plt.plot(other_test_errors_2)
-
-    plt.savefig(f'output/other_test_errors_2_{ts}.png', bbox_inches='tight')
 
 
 if __name__ == '__main__':
