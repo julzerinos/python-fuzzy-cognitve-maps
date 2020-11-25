@@ -40,8 +40,7 @@ def mainpso(n, m):
     def func(w):
         fresult = 0
         res = np.zeros(n)
-        for i in range(0,n):
-            result = 0
+        for i in range(0,n):            result = 0
             wx = 0
             for j in range(0,m):
                 wx = weightsAgg[i][j]
@@ -255,6 +254,20 @@ def mainlmfit():
     print(res['w1']*inputx[0] + res['w2']*inputx[1] + res['w3']*inputx[2])
 
     return
+
+
+def bar():
+    return 2, 1
+
+def foo():
+    return 3, bar()
+
+a, b = foo()
+
+
+
+
+
 
 if __name__ == '__main__':
     #mainpso(3, 4)
