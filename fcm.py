@@ -91,7 +91,7 @@ def rmse(x, y):
 
 
 def pe(x, y):
-    return np.abs((x + 1 - y) / (x + 1))
+    return np.abs(x - y) / (x + 1e-3)
 
 
 def mpe(x, y):
@@ -372,7 +372,7 @@ def main():
 
     transformation = sigmoid
     error = rmse
-    mode = inner_calculations
+    mode = outer_calculations
 
     max_iter = args.i
     performance_index = 1e-5
