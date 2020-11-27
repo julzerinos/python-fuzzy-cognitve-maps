@@ -91,7 +91,7 @@ def rmse(x, y):
 
 
 def pe(x, y):
-    return np.abs((x + 1 - y) / (x + 1))
+    return np.abs(x - y) / (x + 1e-3)
 
 
 def mpe(x, y):
@@ -409,7 +409,10 @@ def main():
     if not os.path.exists('output'):
         os.makedirs('output')
 
-    f = open(f"output/{ts}.txt", "a")
+    if not os.path.exists(f'output/{ts}'):
+        os.makedirs(f'output/{ts}')
+
+    f = open(f"output/{ts}/summary.txt", "a")
 
     f.write("setup details ---------------\n")
     f.write(f"train file {train_file}\n")
@@ -421,6 +424,9 @@ def main():
     f.write(f"calculations position: {mode.__name__}\n")
     f.write(f"max iters: {max_iter}\n")
     f.write(f"window: {str(window)}\n")
+    f.write("\n")
+    f.write("optimized input weights\n")
+    f.write(f"{str(input_weights)}\n")
     f.write("\n")
     f.write("optimized weights matrix\n")
     f.write(f"{str(weights)}\n")
@@ -436,33 +442,39 @@ def main():
     plt.ylabel(f'{error.__name__}')
     plt.xlabel('outer loop iteration count')
     plt.plot(errors)
-    plt.savefig(f'output/train_errors_{ts}.png', bbox_inches='tight')
-
-    test_errors = {'rmse': [], 'mpe': [], 'max_pe': []}
-    for step in step(test_series, window):
-        yt = calc(transformation(), weights, input_weights, step['x'])
-
-        test_errors['rmse'].append(rmse(step['y'], yt))
-        test_errors['mpe'].append(mpe(step['y'], yt))
-        test_errors['max_pe'].append(max_pe(step['y'], yt))
-
-    for i, err in enumerate(test_errors):
-        f2 = plt.figure(i + 2)
-        f2.suptitle(f'{err} errors')
-        plt.ylabel(f'{err}')
-        plt.xlabel('nth forecast vs target')
-        plt.plot(test_errors[err])
-
-        plt.savefig(f'output/{err}_errors_{ts}.png', bbox_inches='tight')
+    plt.savefig(f'output/{ts}/train_errors.png', bbox_inches='tight')
 
     f.write("\n")
-    f.write("test errors\n")
-    f.write(
-        f"rmse max {np.array(test_errors['rmse']).max()} min {np.array(test_errors['rmse']).min()} final {test_errors['rmse'][-1]}\n")
-    f.write(
-        f"mpe max {np.array(test_errors['mpe']).max()} min {np.array(test_errors['mpe']).min()} final {test_errors['mpe'][-1]}\n")
-    f.write(
-        f"max_pe max {np.array(test_errors['max_pe']).max()} min {np.array(test_errors['max_pe']).min()} final {test_errors['max_pe'][-1]}\n")
+    f.write("i = 0 : train series")
+    f.write("i = 1 : test series")
+
+    for i, series in enumerate([train_series, test_series]):
+        test_errors = {'rmse': [], 'mpe': [], 'max_pe': []}
+        for step_i in step(series, window):
+            yt = calc(transformation(), weights, input_weights, step_i['x'])
+
+            test_errors['rmse'].append(rmse(step_i['y'], yt))
+            test_errors['mpe'].append(mpe(step_i['y'], yt))
+            test_errors['max_pe'].append(max_pe(step_i['y'], yt))
+
+        for j, err in enumerate(test_errors):
+            f2 = plt.figure(j + 2)
+            f2.suptitle(f'{err} errors')
+            plt.ylabel(f'{err}')
+            plt.xlabel('nth forecast vs target')
+            plt.plot(test_errors[err])
+
+            plt.savefig(f'output/{ts}/{i}_{err}_errors.png', bbox_inches='tight')
+
+            f.write("\n")
+            f.write(f"{i} test errors\n")
+            f.write(
+                f"rmse max {np.array(test_errors['rmse']).max()} min {np.array(test_errors['rmse']).min()} final {test_errors['rmse'][-1]}\n")
+            f.write(
+                f"mpe max {np.array(test_errors['mpe']).max()} min {np.array(test_errors['mpe']).min()} final {test_errors['mpe'][-1]}\n")
+            f.write(
+                f"max_pe max {np.array(test_errors['max_pe']).max()} min {np.array(test_errors['max_pe']).min()} final {test_errors['max_pe'][-1]}\n")
+
 
     f.close()
 
