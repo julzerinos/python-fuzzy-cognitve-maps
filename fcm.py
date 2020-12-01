@@ -14,6 +14,12 @@ from lmfit import Parameters, Minimizer
 from matplotlib import pyplot as plt
 from tqdm import trange
 
+# globals
+
+CLASS = 1
+TRAIN_PATH = 'UWaveGestureLibrary/Train'
+TEST_PATH = 'UWaveGestureLibrary/Test'
+
 
 # helper
 
@@ -323,48 +329,41 @@ def rescale(min, max):
     return lambda x: np.subtract(x, min) / np.subtract(max, min)
 
 
-def import_and_transform(file_train, file_test, sep=',', header=None):
-    with open(file_train, newline='') as csv_file:
-        model_input_train = np.array(list(csv.reader(csv_file))).astype(np.float)
-    with open(file_test, newline='') as csv_file:
+def import_and_transform(train_files, test_file, sep=',', header=None):
+    model_input_train = []
+    for t in train_files:
+        with open(f'{TRAIN_PATH}/{CLASS}/{t}', newline='') as csv_file:
+            model_input_train.append(np.array(list(csv.reader(csv_file))).astype(np.float))
+    with open(f'{TEST_PATH}/{CLASS}/{test_file}', newline='') as csv_file:
         model_input_test = np.array(list(csv.reader(csv_file))).astype(np.float)
 
-    model_input = np.concatenate((model_input_train, model_input_test))
+    model_input = np.concatenate((model_input_test, model_input_train[0]))
+    for i, t in enumerate(model_input_train):
+        if i == 0:
+            continue
+        model_input = np.concatenate((model_input, t))
 
     max = model_input.max(0)
     min = model_input.min(0)
 
-    return rescale(min, max)(model_input_train), rescale(min, max)(model_input_test)
+    for t in model_input_train:
+        model_input_train = rescale(min, max)(model_input_train)
+
+    return model_input_train, rescale(min, max)(model_input_test)
 
 
-def import_from_uwave(c=1, train=-1, test=-1):
-    train_path = 'UWaveGestureLibrary/Train'
-    train_files = os.listdir(f'{train_path}/{c}')
-    train_index = random.randrange(0, len(train_files))
-    train_file = f'{train_path}/{c}/{train_files[train_index]}'
+def import_from_uwave(amount=1):
+    train_files = random.sample(os.listdir(f'{TRAIN_PATH}/{CLASS}'), amount)
+    test_files = random.sample(os.listdir(f'{TEST_PATH}/{CLASS}'), 1)
 
-    test_path = 'UWaveGestureLibrary/Test'
-    test_files = os.listdir(f'{test_path}/{c}')
-    test_index = random.randrange(0, len(test_files))
-    test_file = f'{test_path}/{c}/{test_files[test_index]}'
+    train_series_set, test_series = import_and_transform(train_files, test_files[0])
 
-    train_series, test_series = import_and_transform(train_file, test_file)
-
-    return train_series, test_series, train_file, test_file
+    return train_series_set, test_series, train_files, test_files
 
 
 #
 
 def main():
-    parser = argparse.ArgumentParser(description='Fuzzy Cognitive Map Temporal Data Forecaster')
-    parser.add_argument('-i', metavar='i',
-                        type=int, help='the maximal iteration count',
-                        default=500, action='store')
-    parser.add_argument('-n', metavar='n',
-                        type=int, help='window size',
-                        default=8, action='store')
-    args = parser.parse_args()
-
     global LAST_SIGNAL
     signal.signal(signal.SIGINT, signal_handle)
 
@@ -374,23 +373,23 @@ def main():
     error = rmse
     mode = outer_calculations
 
-    max_iter = args.i
+    max_iter = 500
     performance_index = 1e-5
 
     errors = []
     loop_error = 0
 
-    data_class = 1
-    train_series, test_series, train_file, test_file = import_from_uwave(data_class)
-    fuzzy_nodes = train_series.shape[1]
-    window = args.n
+    amount = 4
+    train_series_set, test_series, train_file, test_file = import_from_uwave(amount)
+    fuzzy_nodes = train_series_set[0].shape[1]
+    window = 4
 
     input_weights = np.random.rand(window, fuzzy_nodes)
     weights = np.random.rand(fuzzy_nodes, fuzzy_nodes)
 
     for _ in trange(max_iter, desc='model iterations', leave=True):
         weights, input_weights, loop_error = mode(
-            train_series,
+            random.choice(train_series_set),
             fuzzy_nodes, window,
             step, transformation(),
             weights, input_weights,
@@ -445,10 +444,14 @@ def main():
     plt.savefig(f'output/{ts}/train_errors.png', bbox_inches='tight')
 
     f.write("\n")
-    f.write("i = 0 : train series")
-    f.write("i = 1 : test series")
+    f.write(f"i = 0 : test series {test_file}\n")
+    for i, fn in enumerate(train_file):
+        f.write(f"i = {i + 1} : train series {fn}\n")
 
-    for i, series in enumerate([train_series, test_series]):
+    series = [test_series]
+    series.extend(train_series_set)
+
+    for i, series in enumerate(series):
         test_errors = {'rmse': [], 'mpe': [], 'max_pe': []}
         for step_i in step(series, window):
             yt = calc(transformation(), weights, input_weights, step_i['x'])
@@ -466,15 +469,14 @@ def main():
 
             plt.savefig(f'output/{ts}/{i}_{err}_errors.png', bbox_inches='tight')
 
-            f.write("\n")
-            f.write(f"{i} test errors\n")
-            f.write(
-                f"rmse max {np.array(test_errors['rmse']).max()} min {np.array(test_errors['rmse']).min()} final {test_errors['rmse'][-1]}\n")
-            f.write(
-                f"mpe max {np.array(test_errors['mpe']).max()} min {np.array(test_errors['mpe']).min()} final {test_errors['mpe'][-1]}\n")
-            f.write(
-                f"max_pe max {np.array(test_errors['max_pe']).max()} min {np.array(test_errors['max_pe']).min()} final {test_errors['max_pe'][-1]}\n")
-
+        f.write("\n")
+        f.write(f"{i} test errors\n")
+        f.write(
+            f"rmse max {np.array(test_errors['rmse']).max()} min {np.array(test_errors['rmse']).min()} final {test_errors['rmse'][-1]}\n")
+        f.write(
+            f"mpe max {np.array(test_errors['mpe']).max()} min {np.array(test_errors['mpe']).min()} final {test_errors['mpe'][-1]}\n")
+        f.write(
+            f"max_pe max {np.array(test_errors['max_pe']).max()} min {np.array(test_errors['max_pe']).min()} final {test_errors['max_pe'][-1]}\n")
 
     f.close()
 
