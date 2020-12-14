@@ -4,6 +4,7 @@ import random
 import signal
 import sys
 import time
+import argparse
 from contextlib import contextmanager
 
 import numpy as np
@@ -32,18 +33,45 @@ def signal_handle(sig, frame):
     LAST_SIGNAL = sig
 
 
-def main():
+def main(args):
     global LAST_SIGNAL
     signal.signal(signal.SIGINT, signal_handle)
 
-    step = steps.overlap_steps
+    print(args)
+    return
 
-    transformation = trans.sigmoid
-    error = err.rmse
-    mode = modes.outer_calculations
+    steparg, transform, errorarg, modearg, iterarg, pi = args
 
-    max_iter = 500
-    performance_index = 1e-5
+    if (steparg == "overlap"):
+        step = steps.overlap_steps
+    else:
+        step = steps.distinct_steps
+
+    if (transform == "sigmoid"):
+        transformation = trans.sigmoid
+    elif (transform == "binary"):
+        transformation = trans.binary
+    elif (transform == "tanh"):
+        transformation = trans.tanh
+    elif (transform == "arctan"):
+        transformation = trans.arctan
+    else:
+        transformation = trans.gaussian
+
+    if (errorarg == "rmse"):
+        error = err.rmse
+    elif (errorarg == "mpe"):
+        error = err.mpe
+    else:
+        error = err.max_pe
+
+    if (modearg == "outer"):
+        mode = modes.outer_calculations
+    else:
+        mode = modes.inner_calculations
+
+    max_iter = iterarg
+    performance_index = pi
 
     errors = []
     loop_error = 0
@@ -127,4 +155,18 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    parser = argparse.ArgumentParser(description='Fuzzy Cognitive Mapping training')
+    parser.add_argument('-s', '--step', dest='step', default="overlap", choices=["overlap", "distinct"], type=str, help='Steps for training')
+    parser.add_argument('-t', '--transformation', dest='transform', default="sigmoid",
+     choices=["sigmoid", "binary", "tanh", "arctan", "gaussian"],
+     type=str, help='Transformation function')
+    parser.add_argument('-e', '--error', dest='error', default="rmse",
+     choices=["rmse", "mpe", "max_pe"], type=str, help='Error function')  
+    parser.add_argument('-m', '--mode', dest='mode', default="outer",
+     choices=["outer", "inner"], type=str, help='Mode of calculations')
+    parser.add_argument("-i", "--iter", dest="iter", default=500, type=int, help='Training iterations')
+    parser.add_argument("-p", "--performance", dest="pi", default=1e-5, type=float, help='Performance index')
+
+    args = parser.parse_args()
+    argu = args.step, args.transform, args.error, args.mode, args.iter, args.pi
+    main(argu)

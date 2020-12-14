@@ -1,4 +1,5 @@
 import json
+import argparse
 
 import numpy as np
 from matplotlib import pyplot as plt
@@ -61,4 +62,8 @@ def main(ts):
 
 
 if __name__ == '__main__':
-    main('1607964137')
+    parser = argparse.ArgumentParser(description='Fuzzy Cognitive Mapping testing')
+    parser.add_argument('-ts', dest='ts', default='1607964137', type=str, help='Path to the folder with the weights')
+    args = parser.parse_args()
+
+    main(args.ts)
