@@ -1,6 +1,9 @@
+Please add the UWaveGestureLibrary to the 'dataset/' directory as is.
+Refer to diagram below:
+
 Dataset folder structure
 
-src/
+dataset/
     UWaveGestureLibrary/
         Test/
             1/
