@@ -1,5 +1,6 @@
 import json
 import argparse
+from os import path
 
 import numpy as np
 from matplotlib import pyplot as plt
@@ -7,9 +8,11 @@ from matplotlib import pyplot as plt
 from util import data, transformations, modes, steps, errors
 
 
-#
+def main(ts, test_file=None):
+    if not path.exists(f"output/{ts}/train_summary.json"):
+        print("Output folder not found or no test id given")
+        return
 
-def main(ts):
     with open(f"output/{ts}/train_summary.json", "r") as f:
         train_summary = json.load(f)
 
@@ -22,7 +25,7 @@ def main(ts):
 
     train_series_set, test_series = data.import_and_transform(
         train_summary['files']['training'],
-        train_summary['files']['testing'],
+        train_summary['files']['testing'] if test_file is None else test_file,
         train_summary["files"]["train path"],
         train_summary['files']['test path'],
         train_summary["files"]["class"]
@@ -64,6 +67,8 @@ def main(ts):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Fuzzy Cognitive Mapping testing')
     parser.add_argument('-ts', dest='ts', default='1607964137', type=str, help='Path to the folder with the weights')
+    parser.add_argument('-tf', dest='tf', default=None, type=str, help='test file name (eg. "356.csv"')
+
     args = parser.parse_args()
 
-    main(args.ts)
+    main(args.ts, args.tf)
